@@ -22,6 +22,7 @@
 #include "ti_sci_protocol.h"
 
 static uint8_t message_sequence;
+static uint8_t current_sequence;
 static struct mutex ti_sci_mutex_lock = MUTEX_INITIALIZER;
 static unsigned int ti_sci_spin_lock = SPINLOCK_UNLOCK;
 
@@ -115,7 +116,7 @@ static inline int ti_sci_get_response(struct ti_sci_xfer *xfer)
 		hdr = (struct ti_sci_msg_hdr *)msg->buf;
 
 		/* Sanity check for message response */
-		if (hdr->seq == message_sequence)
+		if (hdr->seq == current_sequence)
 			break;
 
 		IMSG("Message with sequence ID %u is not expected", hdr->seq);
@@ -143,9 +144,13 @@ static inline int ti_sci_get_response(struct ti_sci_xfer *xfer)
 static inline int ti_sci_do_xfer(struct ti_sci_xfer *xfer)
 {
 	struct k3_sec_proxy_msg *msg = &xfer->tx_message;
+	struct ti_sci_msg_hdr *hdr = NULL;
 	int ret = 0;
 
 	mutex_lock(&ti_sci_mutex_lock);
+
+	hdr = (struct ti_sci_msg_hdr *)msg->buf;
+	current_sequence = hdr->seq;
 
 	/* Send the message */
 	ret = k3_sec_proxy_send(msg);
