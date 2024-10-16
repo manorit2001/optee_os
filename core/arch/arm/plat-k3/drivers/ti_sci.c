@@ -8,6 +8,7 @@
  */
 
 #include <assert.h>
+#include <kernel/spinlock.h>
 #include <kernel/thread.h>
 #include <malloc.h>
 #include <platform_config.h>
@@ -22,6 +23,7 @@
 
 static uint8_t message_sequence;
 static struct mutex ti_sci_mutex_lock = MUTEX_INITIALIZER;
+static unsigned int ti_sci_spin_lock = SPINLOCK_UNLOCK;
 
 /**
  * struct ti_sci_xfer - Structure representing a message flow
@@ -57,6 +59,7 @@ static int ti_sci_setup_xfer(uint16_t msg_type, uint32_t msg_flags,
 			     struct ti_sci_xfer *xfer)
 {
 	struct ti_sci_msg_hdr *hdr = NULL;
+	uint32_t exceptions = 0;
 
 	/* Ensure we have sane transfer sizes */
 	if (rx_message_size > SEC_PROXY_MAX_MSG_SIZE ||
@@ -68,7 +71,11 @@ static int ti_sci_setup_xfer(uint16_t msg_type, uint32_t msg_flags,
 	}
 
 	hdr = (struct ti_sci_msg_hdr *)tx_buf;
+
+	exceptions = cpu_spin_lock_xsave(&ti_sci_spin_lock);
 	hdr->seq = ++message_sequence;
+	cpu_spin_unlock_xrestore(&ti_sci_spin_lock, exceptions);
+
 	hdr->type = msg_type;
 	hdr->host = OPTEE_HOST_ID;
 	hdr->flags = msg_flags | TI_SCI_FLAG_REQ_ACK_ON_PROCESSED;
