@@ -50,7 +50,7 @@ endif
 srcs-$(CFG_EMBEDDED_TS) += embedded_ts.c
 srcs-y += pseudo_ta.c
 
-srcs-$(CFG_TRANSFER_LIST) += transfer_list.c
+srcs-$(CFG_TRANSFER_LIST) += transfer_list.c transfer_list_validate.c
 
 srcs-$(CFG_SEMIHOSTING) += semihosting.c
 

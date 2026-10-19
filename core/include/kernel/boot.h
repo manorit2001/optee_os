@@ -41,6 +41,8 @@ struct boot_embdata {
 	uint32_t reloc_len;
 };
 
+struct transfer_list_header;
+
 extern unsigned long boot_arg_nsec_entry;
 
 extern const struct core_mmu_config boot_mmu_config;
@@ -54,6 +56,8 @@ void boot_init_memtag(void);
 void boot_clear_memtag(void);
 void boot_save_args(unsigned long a0, unsigned long a1, unsigned long a2,
 		    unsigned long a3, unsigned long a4);
+/* Returns the transfer list after core mapping and bounded validation. */
+struct transfer_list_header *boot_get_transfer_list(void);
 
 void __panic_at_smc_return(void) __noreturn;
 

@@ -42,32 +42,59 @@ static void unmap_list(struct transfer_list_header *tl, size_t sz)
 		panic("Failed to remove transfer list mapping");
 }
 
+static bool transfer_list_check_map_hdr(const struct transfer_list_header *tl)
+{
+	return tl && tl->signature == TRANSFER_LIST_SIGNATURE &&
+	       tl->version != 0 &&
+	       tl->hdr_size == sizeof(*tl) && tl->hdr_size <= tl->max_size &&
+	       tl->alignment >= TRANSFER_LIST_INIT_MAX_ALIGN &&
+	       tl->alignment < sizeof(unsigned long) * 8 &&
+	       tl->max_size >= sizeof(*tl) && tl->size >= tl->hdr_size &&
+	       tl->size <= tl->max_size;
+}
+
 struct transfer_list_header *transfer_list_map(paddr_t pa)
 {
 	struct transfer_list_header *tl = NULL;
 	size_t sz = SMALL_PAGE_SIZE;
-	size_t old_sz = 0;
+	size_t max_size = 0;
 
-	while (true) {
+	tl = core_mmu_add_mapping(MEM_AREA_TRANSFER_LIST, pa, sz);
+	if (!tl) {
+		EMSG("Failed to map TL with PA %#"PRIxPA", size %#zx", pa, sz);
+		return NULL;
+	}
+	if (!transfer_list_check_map_hdr(tl) ||
+	    !IS_ALIGNED(pa, TL_ALIGNMENT_FROM_ORDER(tl->alignment)) ||
+	    ROUNDUP_OVERFLOW(tl->max_size, SMALL_PAGE_SIZE, &sz)) {
+		unmap_list(tl, SMALL_PAGE_SIZE);
+		return NULL;
+	}
+	max_size = tl->max_size;
+
+	if (sz > SMALL_PAGE_SIZE) {
+		unmap_list(tl, SMALL_PAGE_SIZE);
 		tl = core_mmu_add_mapping(MEM_AREA_TRANSFER_LIST, pa, sz);
 		if (!tl) {
 			EMSG("Failed to map TL with PA %#"PRIxPA", size %#zx",
 			     pa, sz);
 			return NULL;
 		}
-		old_sz = sz;
-
-		if (transfer_list_check_header(tl) == TL_OPS_NONE) {
+		if (!transfer_list_check_map_hdr(tl) ||
+		    !IS_ALIGNED(pa, TL_ALIGNMENT_FROM_ORDER(tl->alignment)) ||
+		    tl->max_size != max_size) {
 			unmap_list(tl, sz);
 			return NULL;
 		}
-
-		if (tl->max_size <= sz)
-			return tl;
-
-		sz = ROUNDUP(tl->max_size, SMALL_PAGE_SIZE);
-		unmap_list(tl, old_sz);
 	}
+
+	if (!transfer_list_validate(tl, max_size)) {
+		EMSG("Invalid transfer list");
+		unmap_list(tl, sz);
+		return NULL;
+	}
+
+	return tl;
 }
 
 void transfer_list_unmap_sync(struct transfer_list_header *tl)
