@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
+#include <libfdt.h>
 #include "../drivers/ti_sci_handoff.h"
 
 /* Reuse the real-library mapping harness, not a substitute TL iterator. */
@@ -25,6 +26,10 @@ static void add_record(uint8_t *tl, size_t offset, uint32_t consumer,
 int main(void)
 {
 	_Alignas(8) uint8_t data[88] = { 0 };
+	struct transfer_list_header *tl = NULL;
+	struct transfer_list_entry *fdt_entry = NULL;
+	uint8_t dtb[128];
+	void *fdt = NULL;
 
 	assert(!test_transfer_list_main());
 	guard_tail = false;
@@ -106,5 +111,41 @@ int main(void)
 	assert(!k3_sec_proxy_handoff_init(data, sizeof(data), 16));
 	assert(k3_sec_proxy_handoff_tx_thread() == 8);
 
+	/* Exercise real mapping, FDT mutation and the platform init hook. */
+	tl = transfer_list_init(ram_pa, 4096);
+	add_record(ram, 24, 3, 6, 7);
+	finish_list(ram, 56, 4096, 24);
+	assert(!fdt_create_empty_tree(dtb, sizeof(dtb)));
+	fdt_entry = transfer_list_add(tl, TL_TAG_FDT, sizeof(dtb), dtb);
+	assert(fdt_entry);
+	assert(transfer_list_map(ram_pa) == tl);
+	fdt = transfer_list_entry_data(fdt_entry);
+	assert(transfer_list_check_fdt(tl, virt_to_phys(fdt)));
+	plat_transfer_list_init(tl);
+	assert(transfer_list_set_data_size(tl, fdt_entry,
+					   tl->max_size - tl->size +
+					   fdt_entry->data_size));
+	fdt = transfer_list_entry_data(fdt_entry);
+	assert(!fdt_open_into(fdt, fdt, fdt_entry->data_size));
+	assert(fdt_add_subnode(fdt, 0, "firmware") >= 0);
+	assert(!transfer_list_verify_checksum(tl));
+	assert(k3_sec_proxy_handoff_host_id() == 12);
+	assert(k3_sec_proxy_handoff_rx_thread() == 6);
+	assert(k3_sec_proxy_handoff_tx_thread() == 7);
+	transfer_list_unmap_sync(tl);
+	assert(transfer_list_verify_checksum(tl));
+
+	/* Invalid required settings must stop at the platform hook. */
+	expect_panic = true;
+	if (!setjmp(panic_env)) {
+		plat_transfer_list_init(NULL);
+		abort();
+	}
+	tl->checksum++;
+	if (!setjmp(panic_env)) {
+		plat_transfer_list_init(tl);
+		abort();
+	}
+	expect_panic = false;
 	return 0;
 }

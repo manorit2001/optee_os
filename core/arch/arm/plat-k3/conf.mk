@@ -2,6 +2,15 @@ CFG_WITH_STATS ?= y
 CFG_CRYPTO_WITH_CE ?= y
 CFG_CONSOLE_UART ?= 0
 
+CFG_K3_SEC_PROXY_HANDOFF ?= n
+ifeq ($(CFG_K3_SEC_PROXY_HANDOFF),y)
+ifeq ($(PLATFORM_FLAVOR),am62lx)
+$(error CFG_K3_SEC_PROXY_HANDOFF requires the Secure Proxy transport)
+endif
+$(call force,CFG_TRANSFER_LIST,y)
+$(call force,CFG_DT,y)
+endif
+
 # Disable console output after boot as the UART may
 # become unavailable due to runtime power management
 CFG_CONSOLE_RUNTIME_SET ?= y

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
 #include <util.h>
+#include <kernel/panic.h>
 #include <kernel/transfer_list.h>
+#include <platform_config.h>
 
 #include "ti_sci_handoff.h"
 
@@ -140,6 +142,19 @@ bool k3_sec_proxy_handoff_init(const void *data, size_t buffer_size,
 		return false;
 	handoff_config = selected;
 	return true;
+}
+
+void plat_transfer_list_init(struct transfer_list_header *tl)
+{
+	uint32_t max_thread = MIN(SEC_PROXY_DATA_SIZE,
+				  MIN(SEC_PROXY_SCFG_SIZE,
+				      SEC_PROXY_RT_SIZE)) / 0x1000;
+
+	if (!tl ||
+	    !k3_sec_proxy_handoff_init(tl, MIN(tl->max_size,
+					       K3_SEC_PROXY_HANDOFF_MAX_SIZE),
+				       max_thread))
+		panic("Invalid OP-TEE Secure Proxy handoff record");
 }
 
 uint8_t k3_sec_proxy_handoff_host_id(void)
