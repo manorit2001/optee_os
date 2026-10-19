@@ -102,6 +102,12 @@ struct transfer_list_entry {
 };
 
 struct transfer_list_header *transfer_list_map(paddr_t pa);
+bool transfer_list_check_fdt(struct transfer_list_header *tl, paddr_t fdt);
+/*
+ * On the primary CPU after validation, before DT edits or normal heap/driver
+ * initialization. tl is NULL when no transfer list was supplied.
+ */
+void plat_transfer_list_init(struct transfer_list_header *tl);
 void transfer_list_unmap_sync(struct transfer_list_header *tl);
 void transfer_list_unmap_nosync(struct transfer_list_header *tl);
 
@@ -113,6 +119,9 @@ transfer_list_relocate(struct transfer_list_header *tl, paddr_t pa,
 		       size_t max_size);
 
 #if defined(CFG_TRANSFER_LIST)
+
+/* available must describe mapped RAM; check bounds before checksum reads. */
+bool transfer_list_validate(const void *data, size_t available);
 
 int transfer_list_check_header(const struct transfer_list_header *tl);
 

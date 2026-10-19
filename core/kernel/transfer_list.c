@@ -42,32 +42,60 @@ static void unmap_list(struct transfer_list_header *tl, size_t sz)
 		panic("Failed to remove transfer list mapping");
 }
 
+static bool check_header_fields(const struct transfer_list_header *tl)
+{
+	return tl && tl->signature == TRANSFER_LIST_SIGNATURE &&
+	       tl->version != 0 &&
+	       tl->hdr_size == sizeof(*tl) && tl->hdr_size <= tl->max_size &&
+	       tl->alignment >= TRANSFER_LIST_INIT_MAX_ALIGN &&
+	       tl->alignment < sizeof(unsigned long) * 8 &&
+	       tl->max_size >= sizeof(*tl) && tl->size >= tl->hdr_size &&
+	       tl->size <= tl->max_size &&
+	       tl->max_size <= UINTPTR_MAX - (uintptr_t)tl;
+}
+
 struct transfer_list_header *transfer_list_map(paddr_t pa)
 {
 	struct transfer_list_header *tl = NULL;
 	size_t sz = SMALL_PAGE_SIZE;
-	size_t old_sz = 0;
+	size_t max_size = 0;
 
-	while (true) {
+	tl = core_mmu_add_mapping(MEM_AREA_TRANSFER_LIST, pa, sz);
+	if (!tl) {
+		EMSG("Failed to map TL with PA %#"PRIxPA", size %#zx", pa, sz);
+		return NULL;
+	}
+	if (!check_header_fields(tl) ||
+	    !IS_ALIGNED(pa, TL_ALIGNMENT_FROM_ORDER(tl->alignment)) ||
+	    ROUNDUP_OVERFLOW(tl->max_size, SMALL_PAGE_SIZE, &sz)) {
+		unmap_list(tl, SMALL_PAGE_SIZE);
+		return NULL;
+	}
+	max_size = tl->max_size;
+
+	if (sz > SMALL_PAGE_SIZE) {
+		unmap_list(tl, SMALL_PAGE_SIZE);
 		tl = core_mmu_add_mapping(MEM_AREA_TRANSFER_LIST, pa, sz);
 		if (!tl) {
 			EMSG("Failed to map TL with PA %#"PRIxPA", size %#zx",
 			     pa, sz);
 			return NULL;
 		}
-		old_sz = sz;
-
-		if (transfer_list_check_header(tl) == TL_OPS_NONE) {
+		if (!check_header_fields(tl) ||
+		    !IS_ALIGNED(pa, TL_ALIGNMENT_FROM_ORDER(tl->alignment)) ||
+		    tl->max_size != max_size) {
 			unmap_list(tl, sz);
 			return NULL;
 		}
-
-		if (tl->max_size <= sz)
-			return tl;
-
-		sz = ROUNDUP(tl->max_size, SMALL_PAGE_SIZE);
-		unmap_list(tl, old_sz);
 	}
+
+	if (!transfer_list_validate(tl, max_size)) {
+		EMSG("Invalid transfer list");
+		unmap_list(tl, sz);
+		return NULL;
+	}
+
+	return tl;
 }
 
 void transfer_list_unmap_sync(struct transfer_list_header *tl)
@@ -206,26 +234,8 @@ transfer_list_relocate(struct transfer_list_header *tl, paddr_t pa,
  ******************************************************************************/
 int transfer_list_check_header(const struct transfer_list_header *tl)
 {
-	if (!tl)
-		return TL_OPS_NONE;
-
-	if (tl->signature != TRANSFER_LIST_SIGNATURE) {
-		EMSG("Bad transfer list signature %#"PRIx32, tl->signature);
-		return TL_OPS_NONE;
-	}
-
-	if (!tl->max_size) {
-		EMSG("Bad transfer list max size %#"PRIx32, tl->max_size);
-		return TL_OPS_NONE;
-	}
-
-	if (tl->size > tl->max_size) {
-		EMSG("Bad transfer list size %#"PRIx32, tl->size);
-		return TL_OPS_NONE;
-	}
-
-	if (tl->hdr_size != sizeof(struct transfer_list_header)) {
-		EMSG("Bad transfer list header size %#"PRIx8, tl->hdr_size);
+	if (!check_header_fields(tl)) {
+		EMSG("Invalid transfer list header");
 		return TL_OPS_NONE;
 	}
 
@@ -247,6 +257,45 @@ int transfer_list_check_header(const struct transfer_list_header *tl)
 
 	DMSG("Old transfer list version is detected");
 	return TL_OPS_CUS;
+}
+
+bool transfer_list_validate(const void *data, size_t available)
+{
+	struct transfer_list_header *tl = (void *)data;
+	struct transfer_list_entry *entry = NULL;
+	size_t off = 0;
+	size_t padding = 0;
+
+	if (!tl || !IS_ALIGNED((uintptr_t)tl, TRANSFER_LIST_GRANULE) ||
+	    available < sizeof(*tl) || !check_header_fields(tl) ||
+	    tl->max_size > available ||
+	    transfer_list_check_header(tl) == TL_OPS_NONE)
+		return false;
+
+	off = tl->hdr_size;
+	while (off < tl->size) {
+		entry = transfer_list_next(tl, entry);
+		if (!entry)
+			return false;
+		off = (uint8_t *)transfer_list_entry_data(entry) -
+		      (uint8_t *)tl + entry->data_size;
+		if (off == tl->size)
+			return true;
+		padding = (TRANSFER_LIST_GRANULE - off) &
+			  (TRANSFER_LIST_GRANULE - 1);
+		if (padding > tl->size - off)
+			return false;
+		off += padding;
+	}
+	return off == tl->size;
+}
+
+bool transfer_list_check_fdt(struct transfer_list_header *tl, paddr_t fdt)
+{
+	struct transfer_list_entry *entry = transfer_list_find(tl, TL_TAG_FDT);
+
+	return fdt ==
+	       (entry ? virt_to_phys(transfer_list_entry_data(entry)) : 0);
 }
 
 /*******************************************************************************
