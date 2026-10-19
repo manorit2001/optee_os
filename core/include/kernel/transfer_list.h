@@ -102,6 +102,7 @@ struct transfer_list_entry {
 };
 
 struct transfer_list_header *transfer_list_map(paddr_t pa);
+bool transfer_list_check_fdt(struct transfer_list_header *tl, paddr_t fdt);
 void transfer_list_unmap_sync(struct transfer_list_header *tl);
 void transfer_list_unmap_nosync(struct transfer_list_header *tl);
 

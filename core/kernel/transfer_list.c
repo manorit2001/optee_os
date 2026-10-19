@@ -290,6 +290,14 @@ bool transfer_list_validate(const void *data, size_t available)
 	return off == tl->size;
 }
 
+bool transfer_list_check_fdt(struct transfer_list_header *tl, paddr_t fdt)
+{
+	struct transfer_list_entry *entry = transfer_list_find(tl, TL_TAG_FDT);
+
+	return fdt ==
+	       (entry ? virt_to_phys(transfer_list_entry_data(entry)) : 0);
+}
+
 /*******************************************************************************
  * Enumerate the next transfer entry.
  * @tl: Pointer to the transfer list.

@@ -100,6 +100,7 @@ int main(void)
 	_Alignas(8) uint8_t tl[64] = { 0 };
 	struct transfer_list_header *list = NULL;
 	struct transfer_list_entry *entry = NULL;
+	void *fdt = NULL;
 	uint8_t payload[5000] = { 1 };
 	size_t len = 0;
 
@@ -143,6 +144,16 @@ int main(void)
 		assert(transfer_list_validate(list, sizeof(ram)));
 		assert(!transfer_list_validate(list, sizeof(ram) - 1));
 	}
+
+	list = transfer_list_init(ram_pa, sizeof(ram));
+	assert(transfer_list_check_fdt(list, 0));
+	assert(!transfer_list_check_fdt(list, ram_pa));
+	entry = transfer_list_add(list, TL_TAG_FDT, 3, payload);
+	assert(entry);
+	fdt = transfer_list_entry_data(entry);
+	assert(transfer_list_check_fdt(list, virt_to_phys(fdt)));
+	assert(!transfer_list_check_fdt(list, (uintptr_t)fdt));
+	assert(!transfer_list_check_fdt(list, 0));
 
 	/* A checksum walk into the second page before remapping must fault. */
 	assert(transfer_list_add(list, 2, sizeof(payload), payload));

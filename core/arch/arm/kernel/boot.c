@@ -1144,6 +1144,8 @@ void __weak boot_init_primary_early(void)
 		mapped_tl = transfer_list_map(boot_arg_transfer_list);
 		if (!mapped_tl)
 			panic("Failed to map transfer list");
+		if (!transfer_list_check_fdt(mapped_tl, boot_arg_fdt))
+			panic("DT does not match to the DT entry of the TL");
 
 		transfer_list_dump(mapped_tl);
 		tl_e = transfer_list_find(mapped_tl, TL_TAG_OPTEE_PAGABLE_PART);
@@ -1161,25 +1163,13 @@ void __weak boot_init_primary_early(void)
 }
 
 static void boot_save_transfer_list(unsigned long zero_reg,
-				    unsigned long transfer_list,
-				    unsigned long fdt)
+				    unsigned long transfer_list)
 {
-	struct transfer_list_header *tl = (void *)transfer_list;
-	struct transfer_list_entry *tl_e = NULL;
-
 	if (zero_reg != 0)
 		panic("Incorrect transfer list register convention");
 
-	if (!IS_ALIGNED_WITH_TYPE(transfer_list, struct transfer_list_header) ||
-	    !IS_ALIGNED(transfer_list, TL_ALIGNMENT_FROM_ORDER(tl->alignment)))
+	if (!IS_ALIGNED(transfer_list, TRANSFER_LIST_GRANULE))
 		panic("Transfer list base address is not aligned");
-
-	if (transfer_list_check_header(tl) == TL_OPS_NONE)
-		panic("Invalid transfer list");
-
-	tl_e = transfer_list_find(tl, TL_TAG_FDT);
-	if (fdt != (unsigned long)transfer_list_entry_data(tl_e))
-		panic("DT does not match to the DT entry of the TL");
 
 	boot_arg_transfer_list = transfer_list;
 }
@@ -1414,11 +1404,11 @@ void __weak boot_save_args(unsigned long a0, unsigned long a1,
 	if (IS_ENABLED(CFG_TRANSFER_LIST)) {
 		if (IS_ENABLED(CFG_ARM64_core) &&
 		    a1 == TL_HANDOFF_X1_VALUE(TL_REG_CONVENTION_VER)) {
-			boot_save_transfer_list(a2, a3, a0);
+			boot_save_transfer_list(a2, a3);
 			boot_arg_fdt = a0;
 		} else if (IS_ENABLED(CFG_ARM32_core) &&
 			   a1 == TL_HANDOFF_R1_VALUE(TL_REG_CONVENTION_VER)) {
-			boot_save_transfer_list(a0, a3, a2);
+			boot_save_transfer_list(a0, a3);
 			boot_arg_fdt = a2;
 		}
 
