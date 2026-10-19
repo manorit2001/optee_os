@@ -1,5 +1,6 @@
 
 srcs-y += ti_sci.c ti_crypto.c
+srcs-$(CFG_K3_SEC_PROXY_HANDOFF) += ti_sci_handoff.c
 ifeq ($(PLATFORM_FLAVOR),am62lx)
 srcs-y += mailbox.c
 else

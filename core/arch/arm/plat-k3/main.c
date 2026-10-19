@@ -65,12 +65,18 @@ static TEE_Result init_ti_sci(void)
 	TEE_Result ret = TEE_SUCCESS;
 
 	ret = ti_sci_transport_init();
-	if (ret != TEE_SUCCESS)
+	if (ret != TEE_SUCCESS) {
+		if (IS_ENABLED(CFG_K3_SEC_PROXY_HANDOFF))
+			panic("Failed to initialize required Secure Proxy transport");
 		return ret;
+	}
 
 	ret = ti_sci_init();
-	if (ret)
+	if (ret) {
+		if (IS_ENABLED(CFG_K3_SEC_PROXY_HANDOFF))
+			panic("Failed to initialize required TI-SCI services");
 		return TEE_ERROR_GENERIC;
+	}
 
 	return TEE_SUCCESS;
 }
