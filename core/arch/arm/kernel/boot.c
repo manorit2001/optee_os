@@ -1150,6 +1150,7 @@ void __weak boot_init_primary_early(void)
 		transfer_list_dump(mapped_tl);
 		tl_e = transfer_list_find(mapped_tl, TL_TAG_OPTEE_PAGABLE_PART);
 	}
+	plat_transfer_list_init(mapped_tl);
 
 	if (IS_ENABLED(CFG_WITH_PAGER)) {
 		if (IS_ENABLED(CFG_TRANSFER_LIST) && tl_e)
@@ -1160,6 +1161,10 @@ void __weak boot_init_primary_early(void)
 	}
 
 	init_primary(pageable_part);
+}
+
+void __weak plat_transfer_list_init(struct transfer_list_header *tl __unused)
+{
 }
 
 static void boot_save_transfer_list(unsigned long zero_reg,
