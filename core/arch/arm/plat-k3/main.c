@@ -11,12 +11,19 @@
 #include <drivers/ti_sci_transport.h>
 #include <kernel/boot.h>
 #include <kernel/panic.h>
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+#include <kernel/transfer_list.h>
+#endif
 #include <kernel/tee_common_otp.h>
 #include <mm/core_memprot.h>
 #include <mm/tee_pager.h>
 #include <platform_config.h>
 #include <stdint.h>
 #include <string_ext.h>
+
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+#include "drivers/ti_sci_handoff.h"
+#endif
 
 static struct serial8250_uart_data console_data;
 
@@ -63,6 +70,24 @@ void plat_console_init(void)
 static TEE_Result init_ti_sci(void)
 {
 	TEE_Result ret = TEE_SUCCESS;
+
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+	struct transfer_list_header *tl = boot_get_transfer_list();
+	struct k3_sec_proxy_config config = { 0 };
+	uint32_t max_thread = SEC_PROXY_DATA_SIZE;
+
+	if (max_thread > SEC_PROXY_SCFG_SIZE)
+		max_thread = SEC_PROXY_SCFG_SIZE;
+	if (max_thread > SEC_PROXY_RT_SIZE)
+		max_thread = SEC_PROXY_RT_SIZE;
+	max_thread /= 0x1000;
+
+	if (!tl || !k3_sec_proxy_handoff_parse(tl, tl->max_size,
+					       max_thread, &config)) {
+		EMSG("Invalid OP-TEE Secure Proxy handoff record");
+		return TEE_ERROR_BAD_FORMAT;
+	}
+#endif
 
 	ret = ti_sci_transport_init();
 	if (ret != TEE_SUCCESS)

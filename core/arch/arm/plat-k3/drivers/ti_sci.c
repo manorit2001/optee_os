@@ -19,6 +19,9 @@
 #include "ti_sci.h"
 #include "ti_sci_protocol.h"
 #include "ti_sci_transport.h"
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+#include "ti_sci_handoff.h"
+#endif
 
 /**
  * struct ti_sci_xfer - Structure representing a message flow
@@ -66,7 +69,11 @@ static int ti_sci_setup_xfer(uint16_t msg_type, uint32_t msg_flags,
 
 	hdr = (struct ti_sci_msg_hdr *)tx_buf;
 	hdr->type = msg_type;
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+	hdr->host = k3_sec_proxy_handoff_host_id();
+#else
 	hdr->host = OPTEE_HOST_ID;
+#endif
 	hdr->flags = msg_flags | TI_SCI_FLAG_REQ_ACK_ON_PROCESSED;
 
 	xfer->tx_message.buf = tx_buf;

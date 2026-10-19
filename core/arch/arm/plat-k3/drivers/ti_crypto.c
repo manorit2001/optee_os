@@ -10,11 +10,17 @@
 #include <platform_config.h>
 #include <trace.h>
 #include "ti_crypto.h"
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+#include "ti_sci_handoff.h"
+#endif
 
 TEE_Result ti_crypto_init_rng_fwl(uint16_t fwl_id, uint16_t fwl_region)
 {
 	uint16_t rng_region = RNG_TI_SCI_FW_RGN_ID;
 	uint8_t owner_index = OPTEE_HOST_ID;
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+	owner_index = k3_sec_proxy_handoff_host_id();
+#endif
 	uint8_t owner_privid = 0;
 	uint16_t owner_permission_bits = 0;
 	uint32_t control = 0;

@@ -17,6 +17,9 @@
 #include <trace.h>
 
 #include "ti_sci_transport.h"
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+#include "ti_sci_handoff.h"
+#endif
 
 /* SEC PROXY RT THREAD STATUS */
 #define RT_THREAD_STATUS_REG            0x0
@@ -241,6 +244,11 @@ TEE_Result ti_sci_transport_init(void)
 	uint32_t target_data = 0;
 	uint32_t cfg_scfg = 0;
 	uint32_t cfg_rt = 0;
+
+#if defined(CFG_K3_SEC_PROXY_HANDOFF)
+	rx_thread = k3_sec_proxy_handoff_rx_thread();
+	tx_thread = k3_sec_proxy_handoff_tx_thread();
+#endif
 
 	DMSG("tx_thread: %d, rx_thread: %d", tx_thread, rx_thread);
 
