@@ -114,6 +114,9 @@ transfer_list_relocate(struct transfer_list_header *tl, paddr_t pa,
 
 #if defined(CFG_TRANSFER_LIST)
 
+/* available must describe mapped RAM; check bounds before checksum reads. */
+bool transfer_list_validate(const void *data, size_t available);
+
 int transfer_list_check_header(const struct transfer_list_header *tl);
 
 struct transfer_list_entry *transfer_list_find(struct transfer_list_header *tl,
